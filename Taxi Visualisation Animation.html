@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Classic Taxi Riddle: A Visual Proof</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f1f5f9; /* slate-100 */
+        }
+        .form-checkbox:checked {
+            background-color: #3b82f6; /* blue-500 */
+            border-color: #3b82f6;
+        }
+        .form-checkbox:focus {
+            --tw-ring-color: #3b82f6;
+        }
+        .stat-card {
+            transition: all 0.2s ease-in-out;
+        }
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen p-4 antialiased">
+
+    <main class="w-full max-w-5xl mx-auto space-y-6">
+        <!-- Scenario Description Card -->
+        <div class="bg-white p-6 sm:p-8 rounded-2xl shadow-lg border border-slate-200">
+            <h1 class="text-2xl sm:text-3xl font-bold text-slate-800 mb-2">The Classic Taxi Riddle</h1>
+            <p class="text-slate-600 text-base sm:text-lg">
+                This simulation visualizes a famous problem, in both Physics and Logic. Taxis depart from Stations X and Y every 10 minutes for a 120-min journey. We follow the journey of the main <span class="font-bold text-blue-600">blue taxi</span> from Station Y. How many oncoming taxis will it pass en route?
+            </p>
+            <p class="mt-3 text-sm text-slate-500 bg-slate-50 p-3 rounded-lg">
+                <strong>The Answer is Debatable:</strong> In Physics, The final count depends on the strictness of the definition of "en route". In this simulation, by default, such strictness allows <strong class="text-slate-700">23</strong> taxis to meet the blue one. However, the checkboxes below can adjust the definition to include the very first taxi that enters Y as Blue leaves, and/or the taxi that just comes out of X when Blue enter X.
+            </p>
+        </div>
+
+        <!-- Animation and Controls Card -->
+        <div class="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
+            <div class="relative w-full h-32 bg-slate-800">
+                <canvas id="animationCanvas" class="absolute top-0 left-0 w-full h-full"></canvas>
+            </div>
+            
+            <div class="p-4 sm:p-6 bg-slate-50/50">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+                    <div class="p-4 bg-white rounded-xl shadow-sm border border-slate-200 stat-card">
+                        <p class="text-sm font-medium text-slate-500 tracking-wide uppercase">Taxis Passed</p>
+                        <p id="meetCounter" class="text-4xl sm:text-5xl font-bold text-blue-600">0</p>
+                    </div>
+                    <div class="p-4 bg-white rounded-xl shadow-sm border border-slate-200 stat-card">
+                        <p class="text-sm font-medium text-slate-500 tracking-wide uppercase">Journey Time</p>
+                        <p id="timer" class="text-4xl sm:text-5xl font-bold text-blue-600">0m</p>
+                    </div>
+                    <div class="p-4 bg-white rounded-xl shadow-sm border border-slate-200 stat-card flex items-center justify-center">
+                        <button id="resetButton" class="w-full h-full px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 ease-in-out transform hover:scale-105">
+                            Restart Simulation
+                        </button>
+                    </div>
+                </div>
+
+                <div class="mt-6 pt-4 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-center space-y-3 sm:space-y-0 sm:space-x-8">
+                    <label class="flex items-center space-x-3 text-slate-700 cursor-pointer">
+                        <input type="checkbox" id="countStart" class="form-checkbox h-5 w-5 text-blue-600 rounded border-slate-300 focus:ring-blue-500">
+                        <span>Count pass at <strong class="font-semibold">Station Y</strong> (t=0)</span>
+                    </label>
+                    <label class="flex items-center space-x-3 text-slate-700 cursor-pointer">
+                        <input type="checkbox" id="countEnd" class="form-checkbox h-5 w-5 text-blue-600 rounded border-slate-300 focus:ring-blue-500">
+                        <span>Count pass at <strong class="font-semibold">Station X</strong> (t=120)</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // --- DOM Elements ---
+        const canvas = document.getElementById('animationCanvas');
+        const ctx = canvas.getContext('2d');
+        const meetCounterElement = document.getElementById('meetCounter');
+        const timerElement = document.getElementById('timer');
+        const resetButton = document.getElementById('resetButton');
+        const countStartCheckbox = document.getElementById('countStart');
+        const countEndCheckbox = document.getElementById('countEnd');
+
+        // --- Constants & SVG Assets ---
+        const JOURNEY_MINS = 120;
+        const DEPARTURE_INTERVAL_MINS = 10;
+        const ANIMATION_DURATION_SECS = 25;
+        const TAXI_SVG_STRING = `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><g><path d="M59,33H57a1,1,0,0,1,0-2h2a1,1,0,0,1,0,2Z" fill="#f97316"/><path d="M7,33H5a1,1,0,0,1,0-2H7a1,1,0,0,1,0,2Z" fill="#f97316"/><path d="M53,42H11a3,3,0,0,1-3-3V25a3,3,0,0,1,3-3H53a3,3,0,0,1,3,3v14A3,3,0,0,1,53,42ZM11,24a1,1,0,0,0-1,1v14a1,1,0,0,0,1,1H53a1,1,0,0,0,1-1V25a1,1,0,0,0-1-1Z" fill="#212121"/><rect x="19" y="42" width="6" height="5" rx="1" fill="#212121"/><rect x="39" y="42" width="6" height="5" rx="1" fill="#212121"/><path d="M54,29H10a1,1,0,0,1,0-2H54a1,1,0,0,1,0,2Z" fill="#212121"/><path d="M51,22H13a3,3,0,0,1-2.816-2.051L4.4,5.9A3,3,0,0,1,7.212,2H56.788a3,3,0,0,1,2.816,3.9L53.816,20.051A3,3,0,0,1,51,22ZM13,20H51a1,1,0,0,0,.939-.684l5.788-14.1A1,1,0,0,0,56.788,4H7.212a1,1,0,0,0-.939,1.316l5.788,14.1A1,1,0,0,0,13,20Z" fill="#212121"/><path d="M11,39H53a1,1,0,0,0,1-1V31a1,1,0,0,0-1-1H11a1,1,0,0,0-1,1v7A1,1,0,0,0,11,39Z" fill="FILL_COLOR"/></g></svg>`;
+        const STATION_SVG_STRING = `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><path d="M56,61H8a1,1,0,0,1-1-1V23.28l-.38-.2a1,1,0,0,1-.24-1.38l24-30a1,1,0,0,1,1.24,0l24,30a1,1,0,0,1-.24,1.38l-.38.2V60A1,1,0,0,1,56,61ZM9,59H55V24L32,3.34,9,24Z" fill="#e2e8f0"/><path d="M51,59H13a1,1,0,0,1-1-1V39a1,1,0,0,1,1-1H51a1,1,0,0,1,1,1V58A1,1,0,0,1,51,59ZM14,57H50V40H14Z" fill="#cbd5e1"/><path d="M35,57H29a1,1,0,0,1-1-1V43a1,1,0,0,1,1-1h6a1,1,0,0,1,1,1V56A1,1,0,0,1,35,57ZM30,55h4V44H30Z" fill="#cbd5e1"/><path d="M21,32H43a1,1,0,0,1,1,1V36a1,1,0,0,1-1,1H21a1,1,0,0,1-1-1V33A1,1,0,0,1,21,32Z" fill="#f97316"/></svg>`;
+        
+        let imagesLoaded = 0;
+        let totalImagesToLoad = 0;
+        const imageAssets = {};
+
+        function onImageLoad() {
+            imagesLoaded++;
+            if (imagesLoaded === totalImagesToLoad) {
+                startAnimation();
+            }
+        }
+        
+        function createColoredImage(svgString, color) {
+            totalImagesToLoad++;
+            const coloredSvg = svgString.replace('FILL_COLOR', color);
+            const img = new Image();
+            img.src = "data:image/svg+xml;base64," + btoa(coloredSvg);
+            img.onload = onImageLoad;
+            return img;
+        }
+
+        function loadAssets() {
+            imageAssets.blueTaxi = createColoredImage(TAXI_SVG_STRING, '#3b82f6');
+            imageAssets.orangeTaxi = createColoredImage(TAXI_SVG_STRING, '#f97316');
+            imageAssets.grayTaxi = createColoredImage(TAXI_SVG_STRING, '#9ca3af');
+            imageAssets.flashTaxi = createColoredImage(TAXI_SVG_STRING, '#fef08a');
+            totalImagesToLoad++;
+            imageAssets.station = new Image();
+            imageAssets.station.src = "data:image/svg+xml;base64," + btoa(STATION_SVG_STRING);
+            imageAssets.station.onload = onImageLoad;
+        }
+
+        let taxisFromX = [];
+        let mainTaxiY;
+        let animationFrameId;
+        let startTime;
+
+        class Entity {
+            constructor(x, y, image, departureTime = 0) {
+                this.x = x; this.y = y; this.image = image;
+                this.departureTimeMins = departureTime; this.met = false; this.scale = 1;
+                this.flashUntil = 0;
+            }
+            draw(width, height, isFlipped = false) {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                const scaleX = isFlipped ? -this.scale : this.scale;
+                ctx.scale(scaleX, this.scale);
+                const imageToDraw = (Date.now() < this.flashUntil) ? imageAssets.flashTaxi : this.image;
+                ctx.drawImage(imageToDraw, -width / 2, -height / 2, width, height);
+                ctx.restore();
+            }
+        }
+
+        function setup() {
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = canvas.offsetWidth * dpr;
+            canvas.height = canvas.offsetHeight * dpr;
+            ctx.scale(dpr, dpr);
+            
+            animationFrameId = null;
+            meetCounterElement.textContent = '0';
+            timerElement.textContent = '0m';
+
+            const roadY = canvas.offsetHeight / 2 + 10;
+            mainTaxiY = new Entity(canvas.offsetWidth, roadY, imageAssets.blueTaxi, 0);
+
+            taxisFromX = [];
+            for (let t = -JOURNEY_MINS; t <= JOURNEY_MINS; t += DEPARTURE_INTERVAL_MINS) {
+                const isEndpoint = (t === -JOURNEY_MINS || t === JOURNEY_MINS);
+                const image = isEndpoint ? imageAssets.grayTaxi : imageAssets.orangeTaxi;
+                const taxi = new Entity(0, roadY, image, t);
+                taxisFromX.push(taxi);
+            }
+        }
+
+        function drawScene() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const roadY = canvas.offsetHeight / 2 + 10;
+
+            ctx.fillStyle = '#475569';
+            ctx.fillRect(0, roadY - 15, canvas.offsetWidth, 30);
+            ctx.strokeStyle = '#94a3b8';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(0, roadY - 15, canvas.offsetWidth, 30);
+            
+            ctx.setLineDash([25, 20]);
+            ctx.strokeStyle = '#f59e0b';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(0, roadY);
+            ctx.lineTo(canvas.offsetWidth, roadY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            ctx.drawImage(imageAssets.station, 10, roadY - 60, 50, 50);
+            ctx.drawImage(imageAssets.station, canvas.offsetWidth - 60, roadY - 60, 50, 50);
+            
+            ctx.font = 'bold 14px Inter';
+            ctx.textAlign = 'center';
+            ctx.fillStyle = 'white';
+            ctx.fillText('Station X', 35, roadY - 65);
+            ctx.fillText('Station Y', canvas.offsetWidth - 35, roadY - 65);
+        }
+
+        function updateAndDraw() {
+            if (!startTime) { startTime = performance.now(); }
+            let elapsedTimeSecs = (performance.now() - startTime) / 1000;
+            let virtualMinsPassed = (elapsedTimeSecs / ANIMATION_DURATION_SECS) * JOURNEY_MINS;
+
+            if (virtualMinsPassed >= JOURNEY_MINS) virtualMinsPassed = JOURNEY_MINS;
+
+            drawScene();
+
+            mainTaxiY.x = canvas.offsetWidth * (1 - (virtualMinsPassed / JOURNEY_MINS));
+            mainTaxiY.draw(48, 48);
+
+            let currentMetCount = 0;
+            taxisFromX.forEach(taxi => {
+                const timeSinceDeparture = virtualMinsPassed - taxi.departureTimeMins;
+                
+                if (timeSinceDeparture >= 0) {
+                    let progress = timeSinceDeparture / JOURNEY_MINS;
+                    if (progress > 1) progress = 1;
+                    taxi.x = canvas.offsetWidth * progress;
+                    taxi.draw(48, 48, true);
+
+                    if (!taxi.met && taxi.x >= mainTaxiY.x) {
+                        taxi.met = true;
+                        taxi.flashUntil = Date.now() + 400;
+                        taxi.scale = 1.2;
+                        setTimeout(() => { taxi.scale = 1; }, 400);
+                    }
+                }
+                
+                if (taxi.met) {
+                    if (taxi.departureTimeMins === -JOURNEY_MINS) {
+                        if (countStartCheckbox.checked) currentMetCount++;
+                    } else if (taxi.departureTimeMins === JOURNEY_MINS) {
+                        if (countEndCheckbox.checked) currentMetCount++;
+                    } else {
+                        currentMetCount++;
+                    }
+                }
+            });
+            
+            meetCounterElement.textContent = currentMetCount;
+            timerElement.textContent = `${Math.round(virtualMinsPassed)}m`;
+            
+            if (virtualMinsPassed < JOURNEY_MINS) {
+                animationFrameId = requestAnimationFrame(updateAndDraw);
+            } else {
+                timerElement.textContent = `${JOURNEY_MINS}m`;
+                animationFrameId = null;
+            }
+        }
+        
+        function startAnimation() {
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            startTime = null;
+            setup();
+            animationFrameId = requestAnimationFrame(updateAndDraw);
+        }
+
+        // --- Event Listeners ---
+        resetButton.addEventListener('click', startAnimation);
+        countStartCheckbox.addEventListener('change', startAnimation);
+        countEndCheckbox.addEventListener('change', startAnimation);
+        
+        new ResizeObserver(() => {
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            setTimeout(startAnimation, 100);
+        }).observe(canvas);
+        
+        // --- Initial Load ---
+        loadAssets();
+
+    </script>
+</body>
+</html>
